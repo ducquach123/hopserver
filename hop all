@@ -230,7 +230,7 @@ end)
 -- 4) TARGET LIST
 --==================================================
 local targets = {
-    'Gangster Footera','La Casa Boo','Tang Tang Keletang','Headless Horseman',
+    'Chipso and Queso','La Casa Boo','Tang Tang Keletang','Headless Horseman',
     'Burrito Bandito','Strawberry Elephant','Chicleteira Bicicleteira','Los Chicleteiras',
     'La Grande Combinasion','Nuclearo Dinossauro','Esok Sekolah','Ketupat Kepat',
     'Money Money Puggy','Tictac Sahur','Ketchuru and Musturu','Garama and Madundung',
