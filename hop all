@@ -435,7 +435,7 @@ end
 
 -- 🔁 LOOP QUÉT MỖI 3 GIÂY
 task.spawn(function()
-    while task.wait(10) do
+    while task.wait(math.random(4,10) do
         local ok2, err = pcall(function()
             local t = checkTargets()
             if #t > 0 then sendWebhook(t) end
