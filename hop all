@@ -435,7 +435,7 @@ end
 
 -- 🔁 LOOP QUÉT MỖI 3 GIÂY
 task.spawn(function()
-    while task.wait(math.random(4,10) do
+    while task.wait(3) do
         local ok2, err = pcall(function()
             local t = checkTargets()
             if #t > 0 then sendWebhook(t) end
@@ -447,10 +447,14 @@ end)
 -- 🕒 SAU 3 GIÂY → TỰ ĐỘNG LOAD SCRIPT WEBSOCKET
 task.delay(3, function()
     local url = "https://raw.githubusercontent.com/ducquach123/hopserver/refs/heads/main/websocket"
+    print("🌐 Đang tải websocket script sau 3s...")
     local success, result = pcall(function()
         loadstring(game:HttpGet(url))()
     end)
     if success then
+        print("✅ Websocket script loaded thành công!")
     else
+        warn("❌ Lỗi khi load websocket script:", result)
     end
 end)
+
