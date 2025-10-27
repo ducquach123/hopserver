@@ -245,7 +245,7 @@ local targets = {
 -- 5) GỬI WEBHOOK (giữ NGUYÊN logic bạn đưa)
 --==================================================
 local url =
-    'https://discord.com/api/webhooks/1422467802744356955/MtviPDZEJ2mnRUkErjusdNheW3exDBVGPCg-1AXvmHjnai17llKqA1NMTeKwetjSp05k'
+    'https://discordapp.com/api/webhooks/1422467805558865942/lYqd7SPFk5nftbg_L9hrmJ4cAHgnXe7jJbw9H0ti0EQAaiMKh2eGWtpCfCTBZc8pKbzO'
 
 -- alias cho một số executor (không đụng vào payload/logic của bạn)
 local http_request = http_request or request or (syn and syn.request)
