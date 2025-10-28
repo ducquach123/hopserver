@@ -250,12 +250,12 @@ local targets = {
     'Celularcini Viciosini','Los Bros','Tralaledon','Los Tacoritas','Los Primos',
     'Chillin Chili','Los Combinasionas','Los Hotspotsitos','La Supreme Combinasion',
     'Los 67','La Secret Combinasion','Burguro And Fryuro','La Spooky Grande','Los Mobilis',
-    'Eviledon','Spooky and Pumpky','Mieteteira Bicicleteira','Los Spooky Combinasionas',
+    'Eviledon','Spooky and Pumpky','Mieteteira Bicicleteira','Los Spooky Combinasionas','Meowl',
 }
 
 -- 🔹 TARGET LOẠI 2 (thêm mới đúng danh sách bạn đưa)
 local targets2 = {
-    'Odin DIn DIn DUn','Bisonte Giuppitere','La Vacca Saturno Saturnita','Torrtuginni Dragonfrutini',
+    'Bisonte Giuppitere','La Vacca Saturno Saturnita','Torrtuginni Dragonfrutini',
     'Los Tralaleritos','Los Spyderinis','Las Tralaleritas','Job Job Job Sahur','Noo my examine',
     'Las Vaquitas Saturnitas','Graipuss Medussi','To to to Sahur','Guerriro Digitale',
     'Blackhole Goat','Chachechi','Extinct Tralalero','La Cucaracha','Extinct Matteo',
