@@ -40,14 +40,8 @@ pcall(function()
         local eff = Lighting:FindFirstChild(name)
         if not eff then
             local bycls = Lighting:FindFirstChildOfClass(cls)
-            if bycls then
-                eff = bycls
-                eff.Name = name
-            else
-                eff = Instance.new(cls)
-                eff.Name = name
-                eff.Parent = Lighting
-            end
+            if bycls then eff = bycls; eff.Name = name
+            else eff = Instance.new(cls); eff.Name = name; eff.Parent = Lighting end
         end
         pcall(function() eff.Enabled = false end)
     end
@@ -108,10 +102,7 @@ local function ensureWhite()
     if WhiteGui and WhiteGui.Parent then return end
     local pg = nil
     local ok = pcall(function() pg = LP and LP:WaitForChild('PlayerGui', 10) end)
-    if not ok or not pg then
-        warn('[WhiteScreen] PlayerGui not found')
-        return
-    end
+    if not ok or not pg then warn('[WhiteScreen] PlayerGui not found'); return end
 
     WhiteGui = Instance.new('ScreenGui')
     WhiteGui.Name = 'WhiteOverlay'
@@ -188,10 +179,7 @@ task.spawn(function()
                                         local errorKeywords = { '772' }
                                         local isError = false
                                         for _, kw in ipairs(errorKeywords) do
-                                            if text:find(kw) then
-                                                isError = true
-                                                break
-                                            end
+                                            if text:find(kw) then isError = true break end
                                         end
                                         if isError then
                                             frame.Visible = false
@@ -250,34 +238,19 @@ local targets = {
     'Celularcini Viciosini','Los Bros','Tralaledon','Los Tacoritas','Los Primos',
     'Chillin Chili','Los Combinasionas','Los Hotspotsitos','La Supreme Combinasion',
     'Los 67','La Secret Combinasion','Burguro And Fryuro','La Spooky Grande','Los Mobilis',
-    'Eviledon','Spooky and Pumpky','Mieteteira Bicicleteira','Los Spooky Combinasionas','Meowl',
-}
-
--- 🔹 TARGET LOẠI 2 (thêm mới đúng danh sách bạn đưa)
-local targets2 = {
-    'Bisonte Giuppitere','La Vacca Saturno Saturnita','Torrtuginni Dragonfrutini',
-    'Los Tralaleritos','Los Spyderinis','Las Tralaleritas','Job Job Job Sahur','Noo my examine',
-    'Las Vaquitas Saturnitas','Graipuss Medussi','To to to Sahur','Guerriro Digitale',
-    'Blackhole Goat','Chachechi','Extinct Tralalero','La Cucaracha','Extinct Matteo',
-    'Perrito Burrito','Fragola La La La','Zombie Tralala','Frankentteo',
-    'La Vacca Jacko Linterino','Vulturino Skeletono',
+    'Eviledon','Spooky and Pumpky','Mieteteira Bicicleteira','Los Spooky Combinasionas',
 }
 
 --==================================================
--- 5) GỬI WEBHOOK (giữ NGUYÊN logic bạn đưa) + thêm webhook loại 2
+-- 5) GỬI WEBHOOK (giữ NGUYÊN logic bạn đưa)
 --==================================================
 local url =
     'https://discordapp.com/api/webhooks/1422467805558865942/lYqd7SPFk5nftbg_L9hrmJ4cAHgnXe7jJbw9H0ti0EQAaiMKh2eGWtpCfCTBZc8pKbzO'
-local url_type2 =
-    'https://discordapp.com/api/webhooks/1432680719393624135/CbeXxo7BT00ScPG8sBddhMkxCBBWzL431RvFclSqXZm1OXaxurOUWA-vUqt8iG1zc_wE'
 
 -- alias cho một số executor (không đụng vào payload/logic của bạn)
 local http_request = http_request or request or (syn and syn.request)
 
 local lastJobIdSent = nil
-local lastJobIdSent_type2 = nil -- 🔹 dedupe riêng cho target loại 2
-
--- === HÀM GỐC — GIỮ NGUYÊN ===
 local function sendWebhook(foundTargets)
     if not foundTargets or #foundTargets == 0 then
         return
@@ -292,16 +265,26 @@ local function sendWebhook(foundTargets)
     lastJobIdSent = jobId
 
     local joinScript = "game:GetService('TeleportService'):TeleportToPlaceInstance("
-        .. placeId .. ", '" .. jobId .. "', game.Players.LocalPlayer)"
+        .. placeId
+        .. ", '"
+        .. jobId
+        .. "', game.Players.LocalPlayer)"
     local joinLink = 'https://chillihub1.github.io/chillihub-joiner/?placeId='
-        .. placeId .. '&gameInstanceId=' .. jobId
+        .. placeId
+        .. '&gameInstanceId='
+        .. jobId
 
     -- 🎯 Tạo danh sách target với generation
     local targetList = ''
     for i, target in ipairs(foundTargets) do
         local targetName = target.name or 'Unknown'
         local generation = target.generation or 'N/A'
-        targetList = targetList .. '✅ ' .. targetName .. ' [ ' .. generation .. ']'
+        targetList = targetList
+            .. '✅ '
+            .. targetName
+            .. ' [ '
+            .. generation
+            .. ']'
         if i < #foundTargets then
             targetList = targetList .. '\n'
         end
@@ -314,12 +297,33 @@ local function sendWebhook(foundTargets)
                 ['description'] = targetList,
                 ['color'] = 0x00FF00,
                 ['fields'] = {
-                    { ['name'] = '👥 Players', ['value'] = tostring(#Players:GetPlayers()) .. ' / ' .. tostring(Players.MaxPlayers), ['inline'] = true },
-                    { ['name'] = '🆔 JobId',   ['value'] = '`' .. jobId .. '`', ['inline'] = false },
-                    { ['name'] = '🌐 Join Link',['value'] = '[Join Server](' .. joinLink .. ')', ['inline'] = false },
-                    { ['name'] = '📜 Join Script',['value'] = '```lua\n' .. joinScript .. '\n```', ['inline'] = false },
+                    {
+                        ['name'] = '👥 Players',
+                        ['value'] = tostring(#Players:GetPlayers())
+                            .. ' / '
+                            .. tostring(Players.MaxPlayers),
+                        ['inline'] = true,
+                    },
+                    {
+                        ['name'] = '🆔 JobId',
+                        ['value'] = '`' .. jobId .. '`',
+                        ['inline'] = false,
+                    },
+                    {
+                        ['name'] = '🌐 Join Link',
+                        ['value'] = '[Join Server](' .. joinLink .. ')',
+                        ['inline'] = false,
+                    },
+                    {
+                        ['name'] = '📜 Join Script',
+                        ['value'] = '```lua\n' .. joinScript .. '\n```',
+                        ['inline'] = false,
+                    },
                 },
-                ['footer'] = { ['text'] = 'Spyder Scanner | User: ' .. Players.LocalPlayer.Name },
+                ['footer'] = {
+                    ['text'] = 'Spyder Scanner | User: '
+                        .. Players.LocalPlayer.Name,
+                },
                 ['timestamp'] = DateTime.now():ToIsoDate(),
             },
         },
@@ -346,7 +350,11 @@ local function sendWebhook(foundTargets)
     -- Log target name với generation
     local logTargets = ''
     for i, target in ipairs(foundTargets) do
-        logTargets = logTargets .. target.name .. ' [' .. target.generation .. ']'
+        logTargets = logTargets
+            .. target.name
+            .. ' ['
+            .. target.generation
+            .. ']'
         if i < #foundTargets then
             logTargets = logTargets .. ', '
         end
@@ -354,99 +362,19 @@ local function sendWebhook(foundTargets)
     print('✅ Phát hiện target:', logTargets)
 end
 
--- 🔹 HÀM MỚI — GỬI WEBHOOK RIÊNG CHO TYPE 2 (payload/logic giống hệt)
-local function sendWebhook_type2(foundTargets)
-    if not foundTargets or #foundTargets == 0 then
-        return
-    end
-
-    local placeId = game.PlaceId
-    local jobId = game.JobId
-
-    if jobId == lastJobIdSent_type2 then
-        return
-    end
-    lastJobIdSent_type2 = jobId
-
-    local joinScript = "game:GetService('TeleportService'):TeleportToPlaceInstance("
-        .. placeId .. ", '" .. jobId .. "', game.Players.LocalPlayer)"
-    local joinLink = 'https://chillihub1.github.io/chillihub-joiner/?placeId='
-        .. placeId .. '&gameInstanceId=' .. jobId
-
-    local targetList = ''
-    for i, target in ipairs(foundTargets) do
-        local targetName = target.name or 'Unknown'
-        local generation = target.generation or 'N/A'
-        targetList = targetList .. '✅ ' .. targetName .. ' [ ' .. generation .. ']'
-        if i < #foundTargets then
-            targetList = targetList .. '\n'
-        end
-    end
-
-    local payload = {
-        ['embeds'] = {
-            {
-                ['title'] = '🎯 Target Detected!',
-                ['description'] = targetList,
-                ['color'] = 0x00FF00,
-                ['fields'] = {
-                    { ['name'] = '👥 Players', ['value'] = tostring(#Players:GetPlayers()) .. ' / ' .. tostring(Players.MaxPlayers), ['inline'] = true },
-                    { ['name'] = '🆔 JobId',   ['value'] = '`' .. jobId .. '`', ['inline'] = false },
-                    { ['name'] = '🌐 Join Link',['value'] = '[Join Server](' .. joinLink .. ')', ['inline'] = false },
-                    { ['name'] = '📜 Join Script',['value'] = '```lua\n' .. joinScript .. '\n```', ['inline'] = false },
-                },
-                ['footer'] = { ['text'] = 'Spyder Scanner | User: ' .. Players.LocalPlayer.Name },
-                ['timestamp'] = DateTime.now():ToIsoDate(),
-            },
-        },
-    }
-
-    print('📤 [WEBHOOK-TYPE2] Đang gửi webhook...')
-
-    local success, result = pcall(function()
-        local response = http_request({
-            Url = url_type2,
-            Method = 'POST',
-            Headers = { ['Content-Type'] = 'application/json' },
-            Body = HttpService:JSONEncode(payload),
-        })
-        return response
-    end)
-
-    if success then
-        print('✅ [WEBHOOK-TYPE2] Gửi thành công!')
-    else
-        print('❌ [WEBHOOK-TYPE2] Lỗi:', tostring(result))
-    end
-
-    local logTargets = ''
-    for i, target in ipairs(foundTargets) do
-        logTargets = logTargets .. target.name .. ' [' .. target.generation .. ']'
-        if i < #foundTargets then
-            logTargets = logTargets .. ', '
-        end
-    end
-    print('✅ Phát hiện target (type2):', logTargets)
-end
-
 --==================================================
 -- CHECK TARGETS + LOOP
 --==================================================
 local function checkTargets()
     local foundTargets = {}
-    local foundTargets_type2 = {}
-
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA('TextLabel') and obj.Name == 'DisplayName' then
             local txt = string.lower(obj.LocalizedText or '')
 
-            -- bỏ qua label riêng 'FUSING'
             if string.upper(obj.LocalizedText or '') == 'FUSING' then
                 continue
             end
 
-            -- === Nhóm target gốc ===
-            local matched1 = false
             for _, name in ipairs(targets) do
                 if string.find(txt, string.lower(name)) then
                     local parent = obj.Parent
@@ -468,7 +396,7 @@ local function checkTargets()
                                 local childText = child.LocalizedText or ''
 
                                 if childName:find('generation') or childName:find('gen') then
-                                    generation = (childText ~= '' and childText) or generation
+                                    generation = childText ~= '' and childText or generation
                                     break
                                 end
 
@@ -486,97 +414,41 @@ local function checkTargets()
                     else
                         print('⚠️ Skipped (FUSING):', name)
                     end
-                    matched1 = true
                     break
-                end
-            end
-
-            -- === Nhóm target loại 2 (chỉ check nếu chưa match nhóm 1) ===
-            if not matched1 then
-                for _, name in ipairs(targets2) do
-                    if string.find(txt, string.lower(name)) then
-                        local parent = obj.Parent
-                        local isStolen = false
-                        local generation = 'N/A'
-
-                        if parent then
-                            local stolenLabel = parent:FindFirstChild('Stolen')
-                            if stolenLabel and stolenLabel:IsA('TextLabel') then
-                                local stolenText = string.upper(stolenLabel.LocalizedText or '')
-                                if stolenText == 'FUSING' then
-                                    isStolen = true
-                                end
-                            end
-
-                            for _, child in ipairs(parent:GetChildren()) do
-                                if child:IsA('TextLabel') then
-                                    local childName = string.lower(child.Name or '')
-                                    local childText = child.LocalizedText or ''
-
-                                    if childName:find('generation') or childName:find('gen') then
-                                        generation = (childText ~= '' and childText) or generation
-                                        break
-                                    end
-
-                                    if childText:match('^G%d+') or childText:match('^G%d+%s') then
-                                        generation = childText
-                                        break
-                                    end
-                                end
-                            end
-                        end
-
-                        if not isStolen then
-                            table.insert(foundTargets_type2, { name = name, generation = generation })
-                            print('✅ Found valid target (type2):', name, '| Generation:', generation)
-                        else
-                            print('⚠️ Skipped (FUSING) (type2):', name)
-                        end
-                        break
-                    end
                 end
             end
         end
     end
-
-    return foundTargets, foundTargets_type2
+    return foundTargets
 end
 
 print('🎯 CT_WhiteScanner_V2 đang chạy... (quét mỗi 3s)')
 
 -- ✅ CHẠY NGAY LẦN ĐẦU KHI EXECUTE
-local initialTargets, initialTargets_type2 = checkTargets()
+local initialTargets = checkTargets()
 if #initialTargets > 0 then
     sendWebhook(initialTargets)
 else
-    print('⌛ Chưa phát hiện target nào khi khởi động (type1).')
-end
-if #initialTargets_type2 > 0 then
-    sendWebhook_type2(initialTargets_type2)
-else
-    print('⌛ Chưa phát hiện target nào khi khởi động (type2).')
+    print('⌛ Chưa phát hiện target nào khi khởi động.')
 end
 
 -- 🔁 LOOP QUÉT MỖI 3 GIÂY
 task.spawn(function()
     while task.wait(3) do
         local ok2, err = pcall(function()
-            local t1, t2 = checkTargets()
-            if #t1 > 0 then sendWebhook(t1) end
-            if #t2 > 0 then sendWebhook_type2(t2) end
+            local t = checkTargets()
+            if #t > 0 then sendWebhook(t) end
         end)
-        if not ok2 then
-            warn('⚠️ Scan loop error:', err)
-        end
+        if not ok2 then warn('⚠️ Scan loop error:', err) end
     end
 end)
 
--- 🕒 SAU 3 GIÂY → TỰ ĐỘNG LOAD SCRIPT WEBSOCKET (GIỮ NGUYÊN)
+-- 🕒 SAU 3 GIÂY → TỰ ĐỘNG LOAD SCRIPT WEBSOCKET
 task.delay(3, function()
-    local url_ws = "https://raw.githubusercontent.com/ducquach123/hopserver/refs/heads/main/websocket"
+    local url = "https://raw.githubusercontent.com/ducquach123/hopserver/refs/heads/main/websocket"
     print("🌐 Đang tải websocket script sau 3s...")
     local success, result = pcall(function()
-        loadstring(game:HttpGet(url_ws))()
+        loadstring(game:HttpGet(url))()
     end)
     if success then
         print("✅ Websocket script loaded thành công!")
