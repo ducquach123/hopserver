@@ -1,0 +1,885 @@
+repeat task.wait() until game:IsLoaded()
+
+--==================================================
+-- 0) DỌN DẸP WORKSPACE
+--==================================================
+local function cleanWorkspace()
+    local Workspace = game:GetService("Workspace")
+    local deleted = 0
+    for _, child in pairs(Workspace:GetChildren()) do
+        -- Giữ Debris (UI) và Plots (Synchronizer data)
+        if child.Name ~= "Debris" and not child.Name:lower():match("plot") then
+            pcall(function()
+                child:Destroy()
+                deleted = deleted + 1
+                if deleted % 10 == 0 then task.wait() end
+            end)
+        end
+    end
+    print('✅ Đã dọn dẹp Workspace (giữ Debris + Plots) - Deleted:', deleted)
+end
+
+task.spawn(cleanWorkspace)
+task.wait(0.5)
+
+--==================================================
+-- FILTER LOG
+--==================================================
+pcall(function()
+    local LogService = game:GetService("LogService")
+    local function filterLog(msg)
+        msg = tostring(msg)
+        -- Filter tất cả warnings và messages không cần thiết
+        if msg:find("TutorialArrow") 
+        or msg:find("FUEController") 
+        or msg:find("is not a valid member") 
+        or msg:find("Debris")
+        or msg:find("ReplicatedStorage")
+        or msg:find("observeTag")
+        or msg:find("AnimalClient")
+        or msg:find("AnimalController")
+        or msg:find("FastOverhead")
+        or msg:find("Packages")
+        then
+            return true
+        end
+        return false
+    end
+    local function hookConsole()
+        LogService.MessageOut:Connect(function(msg, msgType)
+            if filterLog(msg) then return end
+            -- Chỉ show errors thôi, bỏ warnings
+            if msgType == Enum.MessageType.MessageError then
+                warn("[ERROR]", msg)
+            end
+        end)
+    end
+    task.spawn(hookConsole)
+    task.delay(5, hookConsole)
+end)
+
+--// Services
+local Players = game:GetService('Players')
+local Lighting = game:GetService('Lighting')
+local UIS = game:GetService('UserInputService')
+local HttpService = game:GetService('HttpService')
+local LP = Players.LocalPlayer
+
+--==================================================
+-- 1) TỐI ƯU ĐỒ HỌA
+--==================================================
+pcall(function()
+    local rs = settings():GetService('RenderSettings')
+    if rs then rs.QualityLevel = Enum.QualityLevel.Level01 end
+end)
+
+pcall(function()
+    Lighting.GlobalShadows = false
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
+    Lighting.FogEnd = 1000
+    Lighting.Brightness = 1
+    Lighting.ClockTime = 12
+    Lighting.ShadowSoftness = 0
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA('BloomEffect') or v:IsA('SunRaysEffect') or v:IsA('DepthOfFieldEffect') or v:IsA('BlurEffect') or v:IsA('ColorCorrectionEffect') then
+            pcall(function() v.Enabled = false end)
+        end
+    end
+end)
+
+pcall(function()
+    local Terrain = workspace:FindFirstChildOfClass('Terrain')
+    if Terrain then
+        Terrain.WaterWaveSize = 0
+        Terrain.WaterWaveSpeed = 0
+        Terrain.WaterReflectance = 0
+        Terrain.WaterTransparency = 1
+    end
+    workspace.StreamingEnabled = true
+    workspace.LevelOfDetail = Enum.ModelLevelOfDetail.Disabled
+end)
+
+local okDesc, descs = pcall(workspace.GetDescendants, workspace)
+if okDesc and type(descs) == 'table' then
+    for _, inst in ipairs(descs) do
+        if inst:IsA('BasePart') then
+            pcall(function()
+                inst.Material = Enum.Material.SmoothPlastic
+                inst.CastShadow = false
+                inst.Reflectance = 0
+            end)
+        elseif inst:IsA('ParticleEmitter') or inst:IsA('Trail') or inst:IsA('Fire') or inst:IsA('Smoke') or inst:IsA('Sparkles') then
+            pcall(function() inst.Enabled = false end)
+        elseif inst:IsA('Decal') or inst:IsA('Texture') then
+            pcall(function()
+                inst.Transparency = 1
+                inst.ZIndex = 0
+            end)
+        elseif inst:IsA('SurfaceAppearance') then
+            pcall(function() inst:Destroy() end)
+        end
+    end
+end
+
+print('✅ Đã tối ưu đồ họa!')
+
+--==================================================
+-- 2) WHITE SCREEN + TIMER
+--==================================================
+local WHITE_ON_START = true
+local TOGGLE_KEY = Enum.KeyCode.P
+local WhiteGui, WhiteFrame, TimerLabel, WhiteOn = nil, nil, nil, false
+local startTime = tick()
+
+local function ensureWhite()
+    if WhiteGui and WhiteGui.Parent then return end
+    local pg = nil
+    local ok = pcall(function() pg = LP and LP:WaitForChild('PlayerGui', 10) end)
+    if not ok or not pg then return end
+
+    WhiteGui = Instance.new('ScreenGui')
+    WhiteGui.Name = 'WhiteOverlay'
+    WhiteGui.ResetOnSpawn = false
+    WhiteGui.IgnoreGuiInset = true
+    WhiteGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    WhiteGui.Parent = pg
+
+    WhiteFrame = Instance.new('Frame')
+    WhiteFrame.Size = UDim2.fromScale(1, 1)
+    WhiteFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+    WhiteFrame.BorderSizePixel = 0
+    WhiteFrame.Visible = false
+    WhiteFrame.Parent = WhiteGui
+
+    TimerLabel = Instance.new('TextLabel')
+    TimerLabel.Size = UDim2.new(0, 300, 0, 100)
+    TimerLabel.Position = UDim2.fromScale(0.5, 0.5)
+    TimerLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+    TimerLabel.BackgroundTransparency = 1
+    TimerLabel.Text = '00:00:00'
+    TimerLabel.TextColor3 = Color3.new(0, 0, 0)
+    TimerLabel.TextSize = 48
+    TimerLabel.Font = Enum.Font.GothamBold
+    TimerLabel.TextStrokeTransparency = 0.8
+    TimerLabel.Parent = WhiteFrame
+end
+
+local function setWhite(b)
+    if not (WhiteGui and WhiteGui.Parent) then ensureWhite() end
+    if not (WhiteGui and WhiteGui.Parent) then return end
+    WhiteOn = b and true or false
+    if WhiteFrame then WhiteFrame.Visible = WhiteOn end
+end
+
+pcall(function()
+    UIS.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.KeyCode == TOGGLE_KEY then
+            setWhite(not WhiteOn)
+        end
+    end)
+end)
+
+if WHITE_ON_START then setWhite(true) end
+
+task.spawn(function()
+    while task.wait(1) do
+        if TimerLabel then
+            local elapsed = tick() - startTime
+            local h = math.floor(elapsed / 3600)
+            local m = math.floor((elapsed % 3600) / 60)
+            local s = math.floor(elapsed % 60)
+            TimerLabel.Text = string.format('%02d:%02d:%02d', h, m, s)
+        end
+    end
+end)
+
+--==================================================
+-- 3) ẨN BẢNG LỖI TELEPORT
+--==================================================
+task.spawn(function()
+    while true do
+        task.wait(11)
+        task.spawn(function()
+            pcall(function()
+                local pg = LP:FindFirstChild('PlayerGui')
+                if pg then
+                    for _, gui in ipairs(pg:GetChildren()) do
+                        if gui:IsA('ScreenGui') and gui.Enabled then
+                            for _, frame in ipairs(gui:GetDescendants()) do
+                                if frame:IsA('Frame') or frame:IsA('ImageLabel') then
+                                    for _, t in ipairs(frame:GetDescendants()) do
+                                        if t:IsA('TextLabel') or t:IsA('TextButton') then
+                                            local text = string.lower(t.Text or '')
+                                            if text:find('772') then
+                                                frame.Visible = false
+                                                gui.Enabled = false
+                                                break
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end)
+    end
+end)
+
+--==================================================
+-- 4) TARGET LISTS
+--==================================================
+local targets1 = {
+    'Chipso and Queso','La Casa Boo','Tang Tang Keletang','Headless Horseman',
+    'Strawberry Elephant','Chicleteira Bicicleteira','Los Chicleteiras',
+    'La Grande Combinasion','Nuclearo Dinossauro','Esok Sekolah','Ketupat Kepat',
+    'Money Money Puggy','Tictac Sahur','Ketchuru and Musturu','Garama and Madundung',
+    'Spaghetti Tualetti','Dragon Cannelloni','67','Tacorita Bicicleta',
+    'La Extinct Grande','Las Sis',
+    'Celularcini Viciosini','Los Bros','Tralaledon','Los Tacoritas','Los Primos',
+    'Chillin Chili','Los Combinasionas','Los Hotspotsitos','La Supreme Combinasion',
+    'Los 67','La Secret Combinasion','Burguro And Fryuro','La Spooky Grande','Los Mobilis',
+    'Eviledon','Spooky and Pumpky','Mieteteira Bicicleteira','Los Spooky Combinasionas','Meowl',
+    'La Taco Combinasion','Mariachi Corazoni','Los Puggies','Los Spaghettis','Fragrama and Chocrama',
+    'Capitano Moby','Swag Soda','Orcaledon','Los Planitos','W or L','Gobblino Uniciclino','Lavadorito Spinito',
+    'Cooki and Milki','Guest 666','La Jolly Grande','Chicleteira Noelteira','Festive 67','Reinito Sleighito',
+    'Los 25','Los candies','La Ginger Sekolah','Swaggy Bros','Dragon Gingerini',
+    'Money Money Reindeer','Donkeyturbo Express','Buho de Nuelo','Jolly Jolly Sahur',
+    'Ginger Gerat','Los Jolly Combnasionas','Tuff Toucan','Skibidi Toilet','Cerberus','Spinny Hammy',
+    'Bacuru and Egguru','Ketupat Bros','Hydra Dragon Cannelloni',
+}
+
+-- DANH SÁCH VIP (PING @here + EMOJI MÈO)
+local targetsVIP = {
+    'Chipso and Queso','La Casa Boo','Tang Tang Keletang','Headless Horseman',
+    'Strawberry Elephant','Nuclearo Dinossauro','Ketupat Kepat',
+    'Money Money Puggy','Tictac Sahur','Ketchuru and Musturu','Garama and Madundung',
+    'Spaghetti Tualetti','Dragon Cannelloni','Tacorita Bicicleta',
+    'La Extinct Grande','Las Sis',
+    'Celularcini Viciosini','Los Bros','Tralaledon','Los Tacoritas','Los Primos',
+    'Chillin Chili','Los Hotspotsitos','La Supreme Combinasion',
+    'La Secret Combinasion','Burguro And Fryuro','La Spooky Grande',
+    'Eviledon','Spooky and Pumpky','Meowl',
+    'La Taco Combinasion','Los Spaghettis','Fragrama and Chocrama',
+    'Capitano Moby','Orcaledon','W or L','Gobblino Uniciclino','Lavadorito Spinito',
+    'Cooki and Milki','Guest 666','La Jolly Grande','Festive 67','Reinito Sleighito',
+    'La Ginger Sekolah','Swaggy Bros','Dragon Gingerini',
+    'Jolly Jolly Sahur','Skibidi Toilet',
+    'Ginger Gerat','Los Jolly Combnasionas','Tuff Toucan','Cerberus',
+    'Ketupat Bros','Hydra Dragon Cannelloni',
+}
+
+local targets2 = {
+    'La Vacca Saturno Saturnita','Los Matteos','1x1x1x1','Torrtuginni Dragonfrutini','Los Tralaleritos',
+    'Los Spyderinis','Las Tralaleritas','Job Job Job Sahur','Tung Tung Tung Sahur','Noo my examine',
+    'Las Vaquitas Saturnitas','Graipuss Medussi','To to to Sahur','Pot Hotspot','Chicleteirina Bicicleteirina',
+    'Guerriro Digitale','Quesadilla Crocodila','Los Nooo My Hotspotsitos','Burrito Bandito','Mummy Ambalabu',
+    'Jackorilla','Pumpkini Spyderini','Trickolino','Telemorte','Los Jobcitos',
+    'Los Tortus','Los Chihuaninis','Los Cucarachas','Los Quesadillas','Los Burritos',
+    'Triplito Tralaleritos','Santa Hotspot','25','Extinct Tralalero','Extinct Matteo',
+    'Quesadillo Vampiro','Zombie Tralala','Frankentteo','La Vacca Jacko Linterino','Reindeer Tralala',
+    'Santteo','List List List Sahur','Puffaball','Los Karkeritos','Agarrini La Palini',
+    'Fragola La La La','Trenostruzzo Turbo 4000','La Sahur Combinasion','La Karkerkar Combinasion','Vulturino Skeletono',
+    'Pirulitoita Bicicleteira','La Vacca Prese Presente','Ho Ho Ho Sahur','Please my Present',
+    'Matteo','Sammyni Spyderini','Dul Dul Dul','Orcalero Orcala','List list list sahur','TooTini Shrimpini','Rocco Disco',
+    'Bunito Bunito Spinito','Los Trios','Chill Puppy',
+}
+
+
+local targetDict1 = {}
+for _, name in ipairs(targets1) do
+    targetDict1[string.lower(name)] = true
+end
+
+local targetDictVIP = {}
+for _, name in ipairs(targetsVIP) do
+    targetDictVIP[string.lower(name)] = true
+end
+
+local targetDict2 = {}
+for _, name in ipairs(targets2) do
+    targetDict2[string.lower(name)] = true
+end
+
+--==================================================
+-- 5) WEBSOCKET HOPPER - DEFINE TRƯỚC KHI DÙNG
+--==================================================
+_G.StartHopper = function()
+    print("🌐 Starting WebSocket Hopper...")
+    pcall(function()
+        local TeleportService = game:GetService("TeleportService")
+        local WS_URL = "ws://127.0.0.1:8080"
+        local AUTO_KICK_TIME = 120
+        local COUNTDOWN_SECONDS = 60
+        local RECONNECT_DELAY = 2
+        local PING_INTERVAL = 10
+        local REQUEST_INTERVAL = 1.25
+        
+        local socket = nil
+        local isConnected = false
+        local lastJobId = nil
+        local pendingJobRequest = false
+        
+        print("🚀 CT WebSocket Hopper Client running...")
+        
+        -- ===== AUTO KICK VỚI COUNTDOWN GUI =====
+        task.spawn(function()
+            local kickTime = AUTO_KICK_TIME - COUNTDOWN_SECONDS
+            task.wait(kickTime)
+            
+            -- Tạo GUI countdown
+            pcall(function()
+                local playerGui = LP:WaitForChild("PlayerGui")
+                local gui = Instance.new("ScreenGui")
+                gui.Name = "KickCountdown"
+                gui.ResetOnSpawn = false
+                gui.Parent = playerGui
+                
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.fromScale(0.5, 0.1)
+                label.Position = UDim2.fromScale(0.25, 0.05)
+                label.BackgroundTransparency = 0.3
+                label.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                label.TextColor3 = Color3.fromRGB(255, 255, 255)
+                label.Font = Enum.Font.SourceSansBold
+                label.TextSize = 36
+                label.Text = "Kick sau " .. COUNTDOWN_SECONDS .. "s"
+                label.Parent = gui
+                
+                -- Đếm ngược
+                for i = COUNTDOWN_SECONDS, 1, -1 do
+                    label.Text = "Kick sau " .. i .. "s"
+                    task.wait(1)
+                end
+                
+                -- Kick
+                LP:Kick("⏰ Auto Kick (mã 267)")
+            end)
+        end)
+        
+        -- ===== HANDLE MESSAGE TỪ SERVER =====
+        local function onMessage(msg)
+            local success, data = pcall(function()
+                return HttpService:JSONDecode(msg)
+            end)
+            
+            if not success or not data then
+                warn("⚠️ Invalid message from server")
+                return
+            end
+            
+            local msgType = data.type
+            
+            if msgType == "welcome" then
+                print("✅ Connected to server! PlaceId:", data.placeId)
+                -- Gửi register với username
+                sendMessage({ 
+                    action = "register", 
+                    username = LP.Name,
+                    userId = LP.UserId
+                })
+                
+            elseif msgType == "registered" then
+                print("✅ Registered:", data.message)
+                
+            elseif msgType == "job" then
+                pendingJobRequest = false
+                
+                if data.jobId then
+                    if data.jobId ~= lastJobId then
+                        lastJobId = data.jobId
+                        print("🎯 Received JobId:", data.jobId)
+                        print("🚀 Teleporting...")
+                        task.wait(0.5)
+                        pcall(function()
+                            TeleportService:TeleportToPlaceInstance(data.placeId, data.jobId, LP)
+                        end)
+                    end
+                else
+                    print("⚠️ Server:", data.message or "No job available")
+                end
+                
+            elseif msgType == "queue_refreshed" then
+                print("♻️ Queue refreshed! Size:", data.queue_size)
+                
+            elseif msgType == "pong" then
+                -- Heartbeat response
+                
+            elseif msgType == "status" then
+                print(string.format("📊 Status: Queue=%d | Assigned=%d | Clients=%d", 
+                    data.queue or 0, data.assigned or 0, data.clients or 0))
+                
+            elseif msgType == "error" then
+                warn("❌ Server error:", data.message)
+            end
+        end
+        
+        -- ===== CONNECT WEBSOCKET =====
+        local function connectWebSocket()
+            if socket then
+                pcall(function() socket:Close() end)
+                socket = nil
+            end
+            
+            isConnected = false
+            
+            local success, ws = pcall(function()
+                -- Thử các executor khác nhau
+                if WebSocket then
+                    return WebSocket.connect(WS_URL)
+                elseif syn and syn.websocket then
+                    return syn.websocket.connect(WS_URL)
+                elseif fluxus and fluxus.websocket then
+                    return fluxus.websocket.connect(WS_URL)
+                elseif websocket and websocket.connect then
+                    return websocket.connect(WS_URL)
+                end
+                return nil
+            end)
+            
+            if not success or not ws then
+                warn("❌ WebSocket connection failed! Retrying in", RECONNECT_DELAY, "s...")
+                task.wait(RECONNECT_DELAY)
+                return connectWebSocket()
+            end
+            
+            socket = ws
+            isConnected = true
+            print("🔗 WebSocket connected!")
+            
+            -- OnMessage handler
+            socket.OnMessage:Connect(function(msg)
+                onMessage(msg)
+            end)
+            
+            -- OnClose handler
+            socket.OnClose:Connect(function()
+                print("🔌 WebSocket disconnected!")
+                isConnected = false
+                socket = nil
+                task.wait(RECONNECT_DELAY)
+                connectWebSocket()
+            end)
+        end
+        
+        -- ===== SEND MESSAGE =====
+        local function sendMessage(data)
+            if not isConnected or not socket then return false end
+            
+            local success = pcall(function()
+                socket:Send(HttpService:JSONEncode(data))
+            end)
+            
+            return success
+        end
+        
+        -- ===== REQUEST JOB =====
+        local function requestJob()
+            if pendingJobRequest then return end
+            pendingJobRequest = true
+            sendMessage({ action = "next" })
+        end
+        
+        -- ===== PING LOOP =====
+        task.spawn(function()
+            while true do
+                task.wait(PING_INTERVAL)
+                if isConnected then
+                    sendMessage({ action = "ping" })
+                end
+            end
+        end)
+        
+        -- ===== JOB REQUEST LOOP =====
+        task.spawn(function()
+            while true do
+                task.wait(REQUEST_INTERVAL)
+                if isConnected then
+                    requestJob()
+                end
+            end
+        end)
+        
+        -- ===== START CONNECTION =====
+        connectWebSocket()
+    end)
+    print("✅ WebSocket Hopper loaded!")
+end
+
+--==================================================
+-- 6) WEBHOOK
+--==================================================
+local http_request = http_request or request or (syn and syn.request)
+
+local function formatMoney(rawValue)
+    if not rawValue or rawValue == 0 then return "$0/s" end
+    local suffixes = {"", "K", "M", "B", "T", "Q", "Qi", "Sx", "Sp", "Oc", "No", "Dc"}
+    local tier = 1
+    local num = rawValue
+    while num >= 1000 and tier < #suffixes do
+        num = num / 1000
+        tier = tier + 1
+    end
+    if num >= 100 then
+        return string.format("$%.0f%s/s", num, suffixes[tier])
+    elseif num >= 10 then
+        return string.format("$%.1f%s/s", num, suffixes[tier])
+    else
+        return string.format("$%.2f%s/s", num, suffixes[tier])
+    end
+end
+
+local lastJobIdSent = nil
+
+-- GỬI WEBHOOK CHO TARGET 1 (Webhook 1 + 2)
+local function sendWebhook1(foundTargets)
+    if not foundTargets or #foundTargets == 0 then return end
+    local placeId = game.PlaceId
+    local jobId = game.JobId
+    if jobId == lastJobIdSent then return end
+    lastJobIdSent = jobId
+
+    local joinScript = "game:GetService('TeleportService'):TeleportToPlaceInstance(" .. placeId .. ", '" .. jobId .. "', game.Players.LocalPlayer)"
+    local joinLink = 'https://chillihub1.github.io/chillihub-joiner/?placeId=' .. placeId .. '&gameInstanceId=' .. jobId
+
+    -- CHECK XEM CÓ VIP KHÔNG
+    local hasVIP = false
+    for _, target in ipairs(foundTargets) do
+        local lowerName = string.lower(target.name or "")
+        if targetDictVIP[lowerName] then
+            hasVIP = true
+            break
+        end
+    end
+
+    -- TẠO TARGET LIST VỚI EMOJI
+    local targetList = ''
+    for i, target in ipairs(foundTargets) do
+        local lowerName = string.lower(target.name or "")
+        local emoji = targetDictVIP[lowerName] and '🐱' or '✅'
+        targetList ..= emoji .. ' ' .. (target.name or 'Unknown') .. ' - ' .. (target.price or "$0/s")
+        if i < #foundTargets then targetList ..= '\n' end
+    end
+
+    -- THÊM @here NẾU CÓ VIP
+    local content = hasVIP and '@here' or ''
+
+    local payload = {
+        ['content'] = content,
+        ['embeds'] = {{
+            ['title'] = '🎯 Target 1 Detected!',
+            ['description'] = targetList,
+            ['color'] = 0x00FF00,
+            ['fields'] = {
+                { ['name'] = '👥 Players', ['value'] = tostring(#Players:GetPlayers()) .. ' / ' .. tostring(Players.MaxPlayers), ['inline'] = true },
+                { ['name'] = '🆔 JobId', ['value'] = '`' .. jobId .. '`', ['inline'] = false },
+                { ['name'] = '🌐 Join Link', ['value'] = '[Join Server](' .. joinLink .. ')', ['inline'] = false },
+                { ['name'] = '📜 Join Script', ['value'] = '```lua\n' .. joinScript .. '\n```', ['inline'] = false },
+            },
+            ['footer'] = { ['text'] = 'Spyder Scanner | User: ' .. Players.LocalPlayer.Name .. ' | GMT+7' },
+            ['timestamp'] = DateTime.now():ToIsoDate(),
+        }}
+    }
+--==================================================
+-- Delay3s
+--==================================================
+    local webhook1 = 'https://discordapp.com/api/webhooks/1466074844948074702/1Lx_6FHMHIfOqk8Exm24oKvHzwGWkYCN38yRL5SNDa3-LYVFcViM1pmyD7oPLWNI2F7R'
+--==================================================
+-- Nodelay
+--==================================================
+    local webhook2 = 'https://discordapp.com/api/webhooks/1434767980645847211/ESpC6wtEpmaCGSWkt6fR_bc6c4REXiBPZcnSDp54SW0v7zc9jnnpk0iEkhzfv-xs4A0d'
+    local jsonPayload = HttpService:JSONEncode(payload)
+    local webhook1Sent = false
+
+    local function sendWithTimeout(url, name, isWebhook1)
+        task.spawn(function()
+            pcall(function()
+                http_request({
+                    Url = url,
+                    Method = 'POST',
+                    Headers = { ['Content-Type'] = 'application/json' },
+                    Body = jsonPayload,
+                })
+                print('✅ ' .. name .. ' sent' .. (hasVIP and ' (VIP DETECTED!)' or ''))
+                if isWebhook1 and not webhook1Sent then
+                    webhook1Sent = true
+                    print('🎯 Webhook1 sent, loading hopper...')
+                    _G.StartHopper()
+                end
+            end)
+        end)
+    end
+
+    sendWithTimeout(webhook2, 'Webhook2', false)
+    task.delay(3, function() sendWithTimeout(webhook1, 'Webhook1', true) end)
+    task.delay(15, function()
+        if not webhook1Sent then
+            warn('⚠️ Webhook1 timeout, starting hopper...')
+            webhook1Sent = true
+            _G.StartHopper()
+        end
+    end)
+end
+
+-- GỬI WEBHOOK CHO TARGET 2 (Webhook 3 only)
+local function sendWebhook2(foundTargets)
+    if not foundTargets or #foundTargets == 0 then return end
+    local placeId = game.PlaceId
+    local jobId = game.JobId
+    if jobId == lastJobIdSent then return end
+    lastJobIdSent = jobId
+
+    local joinScript = "game:GetService('TeleportService'):TeleportToPlaceInstance(" .. placeId .. ", '" .. jobId .. "', game.Players.LocalPlayer)"
+    local joinLink = 'https://chillihub1.github.io/chillihub-joiner/?placeId=' .. placeId .. '&gameInstanceId=' .. jobId
+
+    local targetList = ''
+    for i, target in ipairs(foundTargets) do
+        targetList ..= '✅ ' .. (target.name or 'Unknown') .. ' - ' .. (target.price or "$0/s")
+        if i < #foundTargets then targetList ..= '\n' end
+    end
+
+    local payload = {
+        ['embeds'] = {{
+            ['title'] = '🎯 Target 2 Detected!',
+            ['description'] = targetList,
+            ['color'] = 0xFFFF00,
+            ['fields'] = {
+                { ['name'] = '👥 Players', ['value'] = tostring(#Players:GetPlayers()) .. ' / ' .. tostring(Players.MaxPlayers), ['inline'] = true },
+                { ['name'] = '🆔 JobId', ['value'] = '`' .. jobId .. '`', ['inline'] = false },
+                { ['name'] = '🌐 Join Link', ['value'] = '[Join Server](' .. joinLink .. ')', ['inline'] = false },
+                { ['name'] = '📜 Join Script', ['value'] = '```lua\n' .. joinScript .. '\n```', ['inline'] = false },
+            },
+            ['footer'] = { ['text'] = 'Spyder Scanner | User: ' .. Players.LocalPlayer.Name .. ' | GMT+7' },
+            ['timestamp'] = DateTime.now():ToIsoDate(),
+        }}
+    }
+--==================================================
+-- Normal secrret
+--==================================================
+    local webhook3 = 'https://discordapp.com/api/webhooks/1466274977925038132/YQfTcw1LFFJlORyo_jyy3U3opKX3f4anSkGusINqJAjpQ1AIutK0yUvLI58NnQM8A4xM' --Normalsecret
+
+    local jsonPayload = HttpService:JSONEncode(payload)
+    local webhook3Sent = false
+
+    task.spawn(function()
+        pcall(function()
+            http_request({
+                Url = webhook3,
+                Method = 'POST',
+                Headers = { ['Content-Type'] = 'application/json' },
+                Body = jsonPayload,
+            })
+            print('✅ Webhook3 sent (Target 2)')
+            if not webhook3Sent then
+                webhook3Sent = true
+                print('🎯 Webhook3 sent, loading hopper...')
+                _G.StartHopper()
+            end
+        end)
+    end)
+    
+    task.delay(15, function()
+        if not webhook3Sent then
+            warn('⚠️ Webhook3 timeout, starting hopper...')
+            webhook3Sent = true
+            _G.StartHopper()
+        end
+    end)
+end
+
+--==================================================
+-- 7) QUÉT TARGET - CHECK MODULES
+--==================================================
+local Synchronizer, AnimalsData, AnimalsShared
+
+pcall(function()
+    Synchronizer = require(game.ReplicatedStorage.Packages.Synchronizer)
+    AnimalsData = require(game.ReplicatedStorage.Datas.Animals)
+    AnimalsShared = require(game.ReplicatedStorage.Shared.Animals)
+    print('✅ Loaded game modules!')
+end)
+
+if not Synchronizer or not AnimalsData or not AnimalsShared then
+    warn('⚠️ Không load được modules, chạy hopper...')
+    task.wait(2)
+    _G.StartHopper()
+    return
+end
+
+-- ⭐ HÀM TÌM INSTANCE OK VÀ LẤY PRICE ⭐
+local function getValidTargetInfo(targetName)
+    -- TÌM TRONG DEBRIS
+    local debris = workspace:FindFirstChild('Debris')
+    if not debris then return nil end
+    
+    -- QUÉT TẤT CẢ DISPLAYNAME
+    local lowerTarget = string.lower(targetName)
+    
+    for _, descendant in pairs(debris:GetDescendants()) do
+        if descendant:IsA('TextLabel') and descendant.Name == "DisplayName" then
+            local displayText = descendant.Text or ""
+            local lowerDisplay = string.lower(displayText)
+            
+            -- Check nếu DisplayName chứa tên target
+            if lowerDisplay:find(lowerTarget) then
+                local isFusing = false
+                local parent = descendant.Parent
+                
+                if parent then
+                    -- Check FUSING
+                    for _, child in pairs(parent:GetChildren()) do
+                        if child:IsA('TextLabel') and child.Name == "Stolen" then
+                            local stolenText = string.upper(child.Text or "")
+                            if stolenText == "FUSING" then
+                                isFusing = true
+                            end
+                            break
+                        end
+                    end
+                    
+                    -- NẾU KHÔNG FUSING → LẤY PRICE TỪ GENERATION LABEL
+                    if not isFusing then
+                        -- Tìm Generation/Price trong cùng parent
+                        for _, child in pairs(parent:GetChildren()) do
+                            if child:IsA('TextLabel') then
+                                local childName = string.lower(child.Name or "")
+                                -- Tìm label chứa price (Generation, Price, etc)
+                                if childName:find("generation") or childName:find("price") then
+                                    local priceText = child.Text or ""
+                                    -- Trả về instance OK đầu tiên tìm thấy
+                                    return {
+                                        name = targetName,
+                                        price = priceText  -- Lấy text trực tiếp từ UI
+                                    }
+                                end
+                            end
+                        end
+                        
+                        -- Nếu không tìm thấy price label, vẫn return OK với price mặc định
+                        return {
+                            name = targetName,
+                            price = "Unknown"
+                        }
+                    end
+                end
+            end
+        end
+    end
+    
+    return nil  -- Không có instance OK nào
+end
+
+local function getAllAnimals()
+    local animals = {}
+    local plots = workspace:FindFirstChild('Plots')
+    if not plots then 
+        warn("⚠️ Không tìm thấy Plots!")
+        return animals 
+    end
+    
+    for _, plot in ipairs(plots:GetChildren()) do
+        local ok, channel = pcall(function() return Synchronizer:Get(plot.Name) end)
+        if not ok or not channel then continue end
+        
+        local animalList = channel:Get('AnimalList')
+        if not animalList then continue end
+        
+        for slot, animalData in pairs(animalList) do
+            local name = animalData.Name or animalData.name
+            local animalInfo = AnimalsData[animalData.Index]
+            if not name and animalInfo then
+                name = animalInfo.DisplayName
+            end
+            
+            if name == "STOLEN" or name == "Stolen" then continue end
+            
+            local rawValue = 0
+            pcall(function()
+                rawValue = AnimalsShared:GetGeneration(animalData.Index, animalData.Mutation, animalData.Traits, nil) or 0
+            end)
+            
+            table.insert(animals, {
+                plot = plot.Name,
+                slot = tostring(slot),
+                name = name,
+                rawValue = rawValue
+            })
+        end
+    end
+    
+    return animals
+end
+
+local function checkTargets()
+    local foundTargets1 = {}
+    local foundTargets2 = {}
+    local allAnimals = getAllAnimals()
+    local processedTargets = {}
+    
+    for _, animal in ipairs(allAnimals) do
+        local lowerName = string.lower(animal.name or "")
+        
+        -- CHECK TARGET 1 TRƯỚC
+        if targetDict1[lowerName] and not processedTargets[lowerName] then
+            processedTargets[lowerName] = true
+            local validInfo = getValidTargetInfo(animal.name)
+            if validInfo then
+                table.insert(foundTargets1, validInfo)
+            end
+        -- NẾU KHÔNG PHẢI TARGET 1 → CHECK TARGET 2
+        elseif targetDict2[lowerName] and not processedTargets[lowerName] then
+            processedTargets[lowerName] = true
+            local validInfo = getValidTargetInfo(animal.name)
+            if validInfo then
+                table.insert(foundTargets2, validInfo)
+            end
+        end
+    end
+    
+    return foundTargets1, foundTargets2
+end
+
+print('🎯 CT_WhiteScanner_WebSocket đang chạy...')
+
+-- Initial scan
+task.wait(2)
+local init1, init2 = checkTargets()
+
+-- LOGIC: Nếu có target 1 → gửi webhook 1+2, bỏ qua target 2
+if #init1 > 0 then 
+    print('✅ Tìm thấy', #init1, 'target(s) loại 1!')
+    sendWebhook1(init1)
+-- Nếu KHÔNG có target 1 → check target 2
+elseif #init2 > 0 then
+    print('✅ Tìm thấy', #init2, 'target(s) loại 2!')
+    sendWebhook2(init2)
+else
+    print('⚠️ Không có target, chạy hopper...')
+    task.delay(1, function() _G.StartHopper() end)
+end
+
+-- Scan mỗi 3s
+task.spawn(function()
+    while true do
+        task.wait(3)
+        task.spawn(function()
+            pcall(function()
+                local t1, t2 = checkTargets()
+                -- Ưu tiên target 1
+                if #t1 > 0 then 
+                    print('🎯 Phát hiện', #t1, 'target(s) loại 1!')
+                    sendWebhook1(t1)
+                -- Nếu không có target 1 → check target 2
+                elseif #t2 > 0 then
+                    print('🎯 Phát hiện', #t2, 'target(s) loại 2!')
+                    sendWebhook2(t2)
+                end
+            end)
+        end)
+    end
+end)
+
+print("✅ Script loaded!")
